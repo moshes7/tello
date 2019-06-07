@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from djitellopy import Tello
 
 # --- parameters
-save_images = True
+save_images = False
 output_folder = r'C:\Users\Moshe\Sync\Projects\tello\images\camera1'
 
 # initializations
