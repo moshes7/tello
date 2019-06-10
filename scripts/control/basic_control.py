@@ -49,17 +49,21 @@ from simple_pid import PID
 #   z: forward
 speed = 10
 sleepTime = 0.5
-pid_x = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=0, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_y = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=-50, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_z = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=200, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_az = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=0, sample_time=0.03, output_limits=(-45, 45), auto_mode=True, proportional_on_measurement=False)
+x_ref = 0
+y_ref = 50
+z_ref = 100
+az_ref = 0
+pid_x = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=x_ref, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_y = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=y_ref, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_z = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=z_ref, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_az = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=az_ref, sample_time=0.03, output_limits=(-45, 45), auto_mode=True, proportional_on_measurement=False)
 
 # --- Define Tag
 id_to_find = 0
 marker_size = 15  # - [cm]
 
 save_frames = True
-output_dir = r'D:\Moshe\tello\images'
+output_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream'
 time_str = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
 output_dir = os.path.join(output_dir, time_str)
 os.makedirs(output_dir, exist_ok=True)
@@ -99,7 +103,7 @@ def rotationMatrixToEulerAngles(R):
 
 
 # --- Get the camera calibration path
-calib_path = r'D:\Moshe\tello/camera_calibration/'
+calib_path = r'C:\Users\Moshe\Sync\Projects\tello\images\calibration_camera1/'
 camera_matrix = np.loadtxt(calib_path + 'cameraMatrix.txt', delimiter=',')
 camera_distortion = np.loadtxt(calib_path + 'cameraDistortion.txt', delimiter=',')
 
@@ -133,7 +137,7 @@ ok = tello.streamon()
 frame_read = tello.get_frame_read()
 
 
-tello.takeoff()
+# tello.takeoff()
 # time.sleep(5)
 # tello.move_up(50)
 
@@ -183,8 +187,8 @@ while notDone:
         aruco.drawAxis(frame, camera_matrix, camera_distortion, rvec, tvec, 10)
 
         # -- Print the tag position in camera frame
-        str_position = "MARKER Position x=%4.0f  y=%4.0f  z=%4.0f" % (tvec[0], tvec[1], tvec[2])
-        cv2.putText(frame, str_position, (0, 100), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # str_position = "MARKER Position x=%4.0f  y=%4.0f  z=%4.0f" % (tvec[0], tvec[1], tvec[2])
+        # cv2.putText(frame, str_position, (0, 100), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Obtain the rotation matrix tag->camera
         R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
@@ -194,10 +198,10 @@ while notDone:
         roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip * R_tc)
 
         # -- Print the marker's attitude respect to camera frame
-        str_attitude = "MARKER Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
-        math.degrees(roll_marker), math.degrees(pitch_marker),
-        math.degrees(yaw_marker))
-        cv2.putText(frame, str_attitude, (0, 150), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # str_attitude = "MARKER Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
+        # math.degrees(roll_marker), math.degrees(pitch_marker),
+        # math.degrees(yaw_marker))
+        # cv2.putText(frame, str_attitude, (0, 150), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Now get Position and attitude f the camera respect to the marker
         pos_camera = -R_tc * np.matrix(tvec).T
@@ -213,20 +217,28 @@ while notDone:
         cv2.putText(frame, str_attitude, (0, 250), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         # contrall
-        # x_command = -1 * pid_x(pos_camera[0])
-        # y_command = -1 * pid_y(pos_camera[1])
-        z_command = -1 * pid_z(pos_camera[2])
+        x_command = np.asarray(pid_x(pos_camera[0])).squeeze()
+        y_command = np.asarray(pid_y(pos_camera[1])).squeeze()
+        z_command = np.asarray(pid_z(pos_camera[2])).squeeze()
         # z_command = -1 * np.asarray(pid_z(pos_camera[2])).astype(int)
-        az_command = -1 * pid_az(math.degrees(yaw_camera))
+        az_command = np.asarray(pid_az(math.degrees(pitch_camera))).squeeze() # camera pitch corresponds to azimuth
+
+        str_attitude = "Control Reference: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
+            x_ref, y_ref, z_ref, az_ref)
+        cv2.putText(frame, str_attitude, (0, 300), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+        str_attitude = "Control Commands: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
+            x_command, y_command, z_command, az_command)
+        cv2.putText(frame, str_attitude, (0, 350), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         # tello.send_command_without_return('go {} {} {} {}'.format(x_command, y_command, z_command, speed))
-        if z_command > 0:
-            tello.move_forward(z_command)
-        else:
-            tello.move_back(-z_command)
-
-        FPS = 25
-        time.sleep(1 / FPS)
+        # if z_command > 0:
+        #     tello.move_forward(z_command)
+        # else:
+        #     tello.move_back(-z_command)
+        #
+        # FPS = 25
+        # time.sleep(1 / FPS)
 
     # --- Display the frame
     cv2.imshow('frame', frame)
