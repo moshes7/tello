@@ -9,15 +9,22 @@ TAG:
                 |
                 |tag center
                 O---------> x
-
+               z
 CAMERA:
-
-
+               z
                 X--------> x
                 | frame center
                 |
                 |
                 V y
+
+DRONE:
+               x
+                X--------> y
+                | frame center
+                |
+                |
+                V z
 
 F1: Flipped (180 deg) tag frame around x axis
 F2: Flipped (180 deg) camera frame around x axis
@@ -47,26 +54,36 @@ from simple_pid import PID
 #   x: right
 #   y: down
 #   z: forward
-speed = 10
+SPEED = 50
 sleepTime = 0.5
-x_ref = 0
-y_ref = 50
-z_ref = 100
+x_ref = 100
+y_ref = 0
+z_ref = 0
 az_ref = 0
-pid_x = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=x_ref, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_y = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=y_ref, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_z = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=z_ref, sample_time=0.03, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_az = PID(Kp=1.0, Ki=0.0, Kd=0.0, setpoint=az_ref, sample_time=0.03, output_limits=(-45, 45), auto_mode=True, proportional_on_measurement=False)
+
+TIME_BTW_COMMANDS = 0.25  # [sec]
+
+pid_x = PID(Kp=1., Ki=0, Kd=0.1, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_y = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_z = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_az = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=az_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-45, 45), auto_mode=True, proportional_on_measurement=False)
 
 # --- Define Tag
 id_to_find = 0
 marker_size = 15  # - [cm]
 
+read_images_from_dir = False
+input_images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-10_19.31.23_with_raw_images\raw'
 save_frames = True
+save_frames_raw = True# save raw frames, without markers and text
 output_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream'
 time_str = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
 output_dir = os.path.join(output_dir, time_str)
 os.makedirs(output_dir, exist_ok=True)
+
+if save_frames_raw:
+    output_dir_raw = os.path.join(output_dir, 'raw')
+    os.makedirs(output_dir_raw, exist_ok=True)
 
 # ------------------------------------------------------------------------------
 # ------- ROTATIONS https://www.learnopencv.com/rotation-matrix-to-euler-angles/
@@ -102,6 +119,38 @@ def rotationMatrixToEulerAngles(R):
     return np.array([x, y, z])
 
 
+# Calculates Rotation Matrix given euler angles.
+# R: yaw -> pitch -> roll
+# Rt: roll -> pitch -> yaw
+def eulerAnglesToRotationMatrix(roll, pitch, yaw, degrees=True):
+
+    if degrees:
+        # convert to radians
+        roll = math.radians(roll)
+        pitch = math.radians(pitch)
+        yaw = math.radians(yaw)
+
+    R_x = np.array([[1, 0, 0],
+                    [0, math.cos(roll), -math.sin(roll)],
+                    [0, math.sin(roll), math.cos(roll)]
+                    ])
+
+    R_y = np.array([[math.cos(pitch), 0, math.sin(pitch)],
+                    [0, 1, 0],
+                    [-math.sin(pitch), 0, math.cos(pitch)]
+                    ])
+
+    R_z = np.array([[math.cos(yaw), -math.sin(yaw), 0],
+                    [math.sin(yaw), math.cos(yaw), 0],
+                    [0, 0, 1]
+                    ])
+
+    # R = np.dot(R_z, np.dot(R_y, R_x))
+    R = np.dot(R_x, np.dot(R_y, R_z))
+    Rt = np.transpose(R)
+
+    return R, Rt
+
 # --- Get the camera calibration path
 calib_path = r'C:\Users\Moshe\Sync\Projects\tello\images\calibration_camera1/'
 camera_matrix = np.loadtxt(calib_path + 'cameraMatrix.txt', delimiter=',')
@@ -112,6 +161,15 @@ R_flip = np.zeros((3, 3), dtype=np.float32)
 R_flip[0, 0] = 1.0
 R_flip[1, 1] = -1.0
 R_flip[2, 2] = -1.0
+
+# R_tag_to_drone, R_drone_to_tag = eulerAnglesToRotationMatrix(roll=0, pitch=-90, yaw=90)
+# R_camera_to_tag, R_tag_to_camera = eulerAnglesToRotationMatrix(roll=0, pitch=0, yaw=180)
+#
+# R_camera_to_drone = R_tag_to_drone * R_camera_to_tag
+
+# roll, pitch, yaw = rotationMatrixToEulerAngles(R_camera_to_tag) # sanity check
+# roll, pitch, yaw = rotationMatrixToEulerAngles(R_camera_to_drone) # sanity check
+# R_flip = R_tag_to_camera # FIXME!
 
 # --- Define the aruco dictionary
 # aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
@@ -124,17 +182,33 @@ parameters = aruco.DetectorParameters_create()
 # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-# initializations
-tello = Tello()
 
-ok = tello.connect()
+if read_images_from_dir:
+    images_list = [os.path.join(input_images_dir, image_name) for image_name in os.listdir(input_images_dir) if image_name.endswith('jpg')]
+else:
+    # initializations
+    tello = Tello()
 
-# In case streaming is on. This happens when we quit this program without the escape key.
-ok = tello.streamoff()
+    ok = tello.connect()
 
-ok = tello.streamon()
+    # In case streaming is on. This happens when we quit this program without the escape key.
+    ok = tello.streamoff()
 
-frame_read = tello.get_frame_read()
+    ok = tello.streamon()
+
+    ok = tello.set_speed(SPEED)
+
+    frame_read = tello.get_frame_read()
+
+    time.sleep(3)
+
+
+    ok = tello.takeoff()
+
+    time.sleep(3)
+
+
+    time_received_last_command = time.time()
 
 
 # tello.takeoff()
@@ -149,6 +223,7 @@ frame_read = tello.get_frame_read()
 
 # -- Font for the text in the image
 font = cv2.FONT_HERSHEY_PLAIN
+font_size = 1.2
 
 notDone = True
 t0 = time.time()
@@ -162,8 +237,21 @@ dt_vec = []
 while notDone:
 
     # -- Read the camera frame
-    # ret, frame = cap.read()
-    frame = frame_read.frame
+    if read_images_from_dir:
+
+        if frame_num >= len(images_list):
+            notDone = False
+
+        frame_num = np.mod(frame_num, len(images_list))
+
+        image_name = images_list[frame_num]
+        frame = cv2.imread(image_name, cv2.IMREAD_UNCHANGED)
+    else:
+        # ret, frame = cap.read()
+        frame = frame_read.frame
+
+    # raw frame
+    frame_raw = np.copy(frame)
 
     # -- Convert in gray scale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # -- remember, OpenCV stores color images in Blue, Green, Red
@@ -180,6 +268,8 @@ while notDone:
         ret = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, camera_distortion)
 
         # -- Unpack the output, get only the first
+        # rvec: Rodrigues parameters
+        # tvec: translation vector
         rvec, tvec = ret[0][0, 0, :], ret[1][0, 0, :]
 
         # -- Draw the detected marker and put a reference frame over it
@@ -187,58 +277,88 @@ while notDone:
         aruco.drawAxis(frame, camera_matrix, camera_distortion, rvec, tvec, 10)
 
         # -- Print the tag position in camera frame
-        # str_position = "MARKER Position x=%4.0f  y=%4.0f  z=%4.0f" % (tvec[0], tvec[1], tvec[2])
-        # cv2.putText(frame, str_position, (0, 100), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # cv2.putText(frame, str_position, (0, 100), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Obtain the rotation matrix tag->camera
-        R_ct = np.matrix(cv2.Rodrigues(rvec)[0])
-        R_tc = R_ct.T
+        R_ct = np.matrix(cv2.Rodrigues(rvec)[0]) # camera->tag
+        R_tc = R_ct.T # tag->camera
 
         # -- Get the attitude in terms of euler 321 (Needs to be flipped first)
-        roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip * R_tc)
+        # roll_marker, pitch_marker, yaw_marker = rotationMatrixToEulerAngles(R_flip * R_tc)
 
         # -- Print the marker's attitude respect to camera frame
         # str_attitude = "MARKER Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
         # math.degrees(roll_marker), math.degrees(pitch_marker),
         # math.degrees(yaw_marker))
-        # cv2.putText(frame, str_attitude, (0, 150), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # cv2.putText(frame, str_attitude, (0, 150), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Now get Position and attitude f the camera respect to the marker
         pos_camera = -R_tc * np.matrix(tvec).T
 
         str_position = "CAMERA Position x=%4.0f  y=%4.0f  z=%4.0f" % (pos_camera[0], pos_camera[1], pos_camera[2])
-        cv2.putText(frame, str_position, (0, 200), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(frame, str_position, (0, 200), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Get the attitude of the camera respect to the frame
         roll_camera, pitch_camera, yaw_camera = rotationMatrixToEulerAngles(R_flip * R_tc)
         str_attitude = "CAMERA Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
-        math.degrees(roll_camera), math.degrees(pitch_camera),
-        math.degrees(yaw_camera))
-        cv2.putText(frame, str_attitude, (0, 250), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+            math.degrees(roll_camera), math.degrees(pitch_camera),
+            math.degrees(yaw_camera))
+        cv2.putText(frame, str_attitude, (0, 250), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
-        # contrall
-        x_command = np.asarray(pid_x(pos_camera[0])).squeeze()
-        y_command = np.asarray(pid_y(pos_camera[1])).squeeze()
-        z_command = np.asarray(pid_z(pos_camera[2])).squeeze()
+        # # drone position
+        # pos_drone = R_camera_to_drone * R_tc * (-1 * np.matrix(tvec).T)
+        #
+        # str_position = "DRONE Position x=%4.0f  y=%4.0f  z=%4.0f" % (pos_drone[0], pos_drone[1], pos_drone[2])
+        # cv2.putText(frame, str_position, (0, 300), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+        #
+        # # -- Get the attitude of the drone respect to the frame
+        # roll_drone, pitch_drone, yaw_drone= rotationMatrixToEulerAngles(R_tag_to_drone * R_ct)
+        # str_attitude = "Drone Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
+        #     math.degrees(roll_drone), math.degrees(pitch_drone), math.degrees(yaw_drone))
+        # cv2.putText(frame, str_attitude, (0, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+
+        # control
+        # x_command = -1 * np.asarray(pid_x(pos_camera[2])).squeeze()
+        x_command = 1 * np.asarray(pid_x(pos_camera[2])).squeeze()
+        # x_command = np.asarray(pid_x(pos_camera[0])).squeeze()
+        # y_command = 0# -1 *np.asarray(pid_y(pos_camera[0])).squeeze()
+        y_command = 1 *np.asarray(pid_y(pos_camera[0])).squeeze()
+        # z_command = 0 #np.asarray(pid_z(pos_camera[2])).squeeze()
+        z_command = 1 * np.asarray(pid_z(pos_camera[2])).squeeze()
         # z_command = -1 * np.asarray(pid_z(pos_camera[2])).astype(int)
-        az_command = np.asarray(pid_az(math.degrees(pitch_camera))).squeeze() # camera pitch corresponds to azimuth
+        az_command = 0 #np.asarray(pid_az(math.degrees(pitch_camera))).squeeze() # camera pitch corresponds to azimuth
 
         str_attitude = "Control Reference: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
             x_ref, y_ref, z_ref, az_ref)
-        cv2.putText(frame, str_attitude, (0, 300), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(frame, str_attitude, (0, 400), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         str_attitude = "Control Commands: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
             x_command, y_command, z_command, az_command)
-        cv2.putText(frame, str_attitude, (0, 350), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(frame, str_attitude, (0, 450), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
-        # tello.send_command_without_return('go {} {} {} {}'.format(x_command, y_command, z_command, speed))
-        # if z_command > 0:
-        #     tello.move_forward(z_command)
-        # else:
-        #     tello.move_back(-z_command)
-        #
-        # FPS = 25
-        # time.sleep(1 / FPS)
+        if not read_images_from_dir:
+
+            if (time.time() - time_received_last_command) >= TIME_BTW_COMMANDS:
+
+                # speed_sign = 1 if x_command >= 0 else -1
+                # x_command = abs(x_command)
+                # tello.send_command_without_return('go {} {} {} {}'.format(x_command, 0, 0, speed_sign * SPEED))
+
+                left_right = y_command
+                forward_backward = x_command
+                up_down = z_command
+                az = az_command
+
+                # tello.send_command_without_return('rc {} {} {} {}'.format(left_right, forward_backward, up_down, az))
+                tello.send_rc_control(left_right, forward_backward, up_down, az)
+
+                # if z_command > 0:
+                #     tello.move_forward(z_command)
+                # else:
+                #     tello.move_back(-z_command)
+
+                # FPS = 25
+                # time.sleep(1 / FPS)
 
     # --- Display the frame
     cv2.imshow('frame', frame)
@@ -247,6 +367,9 @@ while notDone:
         img_name = os.path.join(output_dir, '{0:07d}.jpg'.format(frame_num))
         cv2.imwrite(img_name, frame)
 
+    if save_frames_raw:
+        img_name_raw = os.path.join(output_dir_raw, '{0:07d}.jpg'.format(frame_num))
+        cv2.imwrite(img_name_raw, frame_raw)
 
 
     # save timing
@@ -268,9 +391,11 @@ while notDone:
         # cap.release()
         cv2.destroyAllWindows()
 
-        tello.land()
-        time.sleep(5)
-        tello.end()
+        if not read_images_from_dir:
+            time.sleep(0.5)
+            tello.land()
+            time.sleep(5)
+            tello.end()
 
         break
 
