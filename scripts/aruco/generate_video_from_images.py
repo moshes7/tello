@@ -6,7 +6,7 @@ import numpy as np
 max_frame_num = None
 # max_frame_num = 300
 
-images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-11_20.56.51'
+images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-12_22.03.57_First_Good_Tracking'
 output_dir = os.path.join(images_dir, 'video')
 os.makedirs(output_dir, exist_ok=True)
 output_filename = 'video.avi'

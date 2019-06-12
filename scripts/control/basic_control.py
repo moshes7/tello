@@ -1,3 +1,4 @@
+from __future__ import print_function, division, unicode_literals, absolute_import
 """
 This demo calculates multiple things for different scenarios.
 
@@ -54,18 +55,18 @@ from simple_pid import PID
 #   x: right
 #   y: down
 #   z: forward
-SPEED = 50
+SPEED = 40
 sleepTime = 0.5
 x_ref = 100
 y_ref = 0
-z_ref = 0
+z_ref = -10
 az_ref = 0
 
 TIME_BTW_COMMANDS = 0.25  # [sec]
 
-pid_x = PID(Kp=1., Ki=0, Kd=0.1, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_y = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
-pid_z = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-100, 100), auto_mode=True, proportional_on_measurement=False)
+pid_x = PID(Kp=0.75, Ki=0, Kd=0.2, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+pid_y = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+pid_z = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
 pid_az = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=az_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-45, 45), auto_mode=True, proportional_on_measurement=False)
 
 # --- Define Tag
@@ -151,6 +152,61 @@ def eulerAnglesToRotationMatrix(roll, pitch, yaw, degrees=True):
 
     return R, Rt
 
+_FLOAT_EPS_4 = np.finfo(float).eps * 4.0
+
+
+def euler2mat(z=0, y=0, x=0):
+
+    Ms = []
+    if z:
+        cosz = math.cos(z)
+        sinz = math.sin(z)
+        Ms.append(np.array(
+                [[cosz, -sinz, 0],
+                 [sinz, cosz, 0],
+                 [0, 0, 1]]))
+    if y:
+        cosy = math.cos(y)
+        siny = math.sin(y)
+        Ms.append(np.array(
+                [[cosy, 0, siny],
+                 [0, 1, 0],
+                 [-siny, 0, cosy]]))
+    if x:
+        cosx = math.cos(x)
+        sinx = math.sin(x)
+        Ms.append(np.array(
+                [[1, 0, 0],
+                 [0, cosx, -sinx],
+                 [0, sinx, cosx]]))
+    if Ms:
+        return np.reduce(np.dot, Ms[::-1])
+    return np.eye(3)
+
+
+def mat2euler(M, cy_thresh=None):
+
+    M = np.asarray(M)
+    if cy_thresh is None:
+        try:
+            cy_thresh = np.finfo(M.dtype).eps * 4
+        except ValueError:
+            cy_thresh = _FLOAT_EPS_4
+    r11, r12, r13, r21, r22, r23, r31, r32, r33 = M.flat
+    # cy: sqrt((cos(y)*cos(z))**2 + (cos(x)*cos(y))**2)
+    cy = math.sqrt(r33*r33 + r23*r23)
+    if cy > cy_thresh: # cos(y) not close to zero, standard form
+        z = math.atan2(-r12,  r11) # atan2(cos(y)*sin(z), cos(y)*cos(z))
+        y = math.atan2(r13,  cy) # atan2(sin(y), cy)
+        x = math.atan2(-r23, r33) # atan2(cos(y)*sin(x), cos(x)*cos(y))
+    else: # cos(y) (close to) zero, so x -> 0.0 (see above)
+        # so r21 -> sin(z), r22 -> cos(z) and
+        z = math.atan2(r21,  r22)
+        y = math.atan2(r13,  cy) # atan2(sin(y), cy)
+        x = 0.0
+    return z, y, x
+
+
 # --- Get the camera calibration path
 calib_path = r'C:\Users\Moshe\Sync\Projects\tello\images\calibration_camera1/'
 camera_matrix = np.loadtxt(calib_path + 'cameraMatrix.txt', delimiter=',')
@@ -189,19 +245,37 @@ else:
     # initializations
     tello = Tello()
 
-    ok = tello.connect()
+    if not tello.connect():
+        print("Tello not connected")
+        exit(1)
+
+    if not tello.set_speed(SPEED):
+        print("Not set speed to lowest possible")
+        exit(1)
 
     # In case streaming is on. This happens when we quit this program without the escape key.
-    ok = tello.streamoff()
+    if not tello.streamoff():
+        print("Could not stop video stream")
+        exit(1)
 
-    ok = tello.streamon()
-
-    ok = tello.set_speed(SPEED)
+    if not tello.streamon():
+        print("Could not start video stream")
+        exit(1)
 
     frame_read = tello.get_frame_read()
 
-    time.sleep(3)
+    # ok = tello.connect()
+    #
+    # # In case streaming is on. This happens when we quit this program without the escape key.
+    # ok = tello.streamoff()
+    #
+    # ok = tello.streamon()
+    #
+    # ok = tello.set_speed(SPEED)
+    #
+    # frame_read = tello.get_frame_read()
 
+    time.sleep(3)
 
     ok = tello.takeoff()
 
@@ -299,10 +373,12 @@ while notDone:
         cv2.putText(frame, str_position, (0, 200), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Get the attitude of the camera respect to the frame
+        # roll_camera, pitch_camera, yaw_camera = rotationMatrixToEulerAngles(R_flip * R_tc)
         roll_camera, pitch_camera, yaw_camera = rotationMatrixToEulerAngles(R_flip * R_tc)
+        # roll_camera, pitch_camera, yaw_camera = mat2euler(R_flip * R_tc)
+
         str_attitude = "CAMERA Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
-            math.degrees(roll_camera), math.degrees(pitch_camera),
-            math.degrees(yaw_camera))
+            math.degrees(roll_camera), math.degrees(pitch_camera), math.degrees(yaw_camera))
         cv2.putText(frame, str_attitude, (0, 250), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # # drone position
@@ -318,47 +394,50 @@ while notDone:
         # cv2.putText(frame, str_attitude, (0, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # control
-        # x_command = -1 * np.asarray(pid_x(pos_camera[2])).squeeze()
-        x_command = 1 * np.asarray(pid_x(pos_camera[2])).squeeze()
-        # x_command = np.asarray(pid_x(pos_camera[0])).squeeze()
-        # y_command = 0# -1 *np.asarray(pid_y(pos_camera[0])).squeeze()
+        # x_command = 1 * np.asarray(pid_x(pos_camera[2])).squeeze()
+        # y_command = 1 *np.asarray(pid_y(pos_camera[0])).squeeze()
+        # z_command = 1 * np.asarray(pid_z(pos_camera[1])).squeeze()
+        x_command = -1 * np.asarray(pid_x(pos_camera[2])).squeeze()
         y_command = 1 *np.asarray(pid_y(pos_camera[0])).squeeze()
-        # z_command = 0 #np.asarray(pid_z(pos_camera[2])).squeeze()
-        z_command = 1 * np.asarray(pid_z(pos_camera[2])).squeeze()
-        # z_command = -1 * np.asarray(pid_z(pos_camera[2])).astype(int)
+        z_command = - 1 * np.asarray(pid_z(pos_camera[1])).squeeze()
         az_command = 0 #np.asarray(pid_az(math.degrees(pitch_camera))).squeeze() # camera pitch corresponds to azimuth
+    else:
+        x_command = 0
+        y_command = 0
+        z_command = 0
+        az_command = 0
 
-        str_attitude = "Control Reference: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
-            x_ref, y_ref, z_ref, az_ref)
-        cv2.putText(frame, str_attitude, (0, 400), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+    str_attitude = "Control Reference: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
+        x_ref, y_ref, z_ref, az_ref)
+    cv2.putText(frame, str_attitude, (0, 400), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
-        str_attitude = "Control Commands: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
-            x_command, y_command, z_command, az_command)
-        cv2.putText(frame, str_attitude, (0, 450), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+    str_attitude = "Control Commands: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
+        x_command, y_command, z_command, az_command)
+    cv2.putText(frame, str_attitude, (0, 450), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
-        if not read_images_from_dir:
+    if not read_images_from_dir:
 
-            if (time.time() - time_received_last_command) >= TIME_BTW_COMMANDS:
+        if (time.time() - time_received_last_command) >= TIME_BTW_COMMANDS:
 
-                # speed_sign = 1 if x_command >= 0 else -1
-                # x_command = abs(x_command)
-                # tello.send_command_without_return('go {} {} {} {}'.format(x_command, 0, 0, speed_sign * SPEED))
+            # speed_sign = 1 if x_command >= 0 else -1
+            # x_command = abs(x_command)
+            # tello.send_command_without_return('go {} {} {} {}'.format(x_command, 0, 0, speed_sign * SPEED))
 
-                left_right = y_command
-                forward_backward = x_command
-                up_down = z_command
-                az = az_command
+            left_right = int(y_command)
+            forward_backward = int(x_command)
+            up_down = int(z_command)
+            az = int(az_command)
 
-                # tello.send_command_without_return('rc {} {} {} {}'.format(left_right, forward_backward, up_down, az))
-                tello.send_rc_control(left_right, forward_backward, up_down, az)
+            # tello.send_command_without_return('rc {} {} {} {}'.format(left_right, forward_backward, up_down, az))
+            tello.send_rc_control(left_right, forward_backward, up_down, az)
 
-                # if z_command > 0:
-                #     tello.move_forward(z_command)
-                # else:
-                #     tello.move_back(-z_command)
+            # if z_command > 0:
+            #     tello.move_forward(z_command)
+            # else:
+            #     tello.move_back(-z_command)
 
-                # FPS = 25
-                # time.sleep(1 / FPS)
+            # FPS = 25
+            # time.sleep(1 / FPS)
 
     # --- Display the frame
     cv2.imshow('frame', frame)
