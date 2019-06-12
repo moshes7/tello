@@ -49,7 +49,7 @@ import sys, time, math, os
 import datetime
 from djitellopy import Tello
 from simple_pid import PID
-
+from functools import reduce
 # define pid controllers
 # camera reference frame:
 #   x: right
@@ -62,19 +62,19 @@ y_ref = 0
 z_ref = -10
 az_ref = 0
 
-TIME_BTW_COMMANDS = 0.25  # [sec]
+TIME_BTW_COMMANDS = 0.2  # [sec]
 
 pid_x = PID(Kp=0.75, Ki=0, Kd=0.2, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
-pid_y = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
-pid_z = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
-pid_az = PID(Kp=0.75, Ki=0.0, Kd=0.2, setpoint=az_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-45, 45), auto_mode=True, proportional_on_measurement=False)
+pid_y = PID(Kp=0.65, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+pid_z = PID(Kp=1.2, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+pid_az = PID(Kp=3, Ki=0.0, Kd=0.2, setpoint=az_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-70, 70), auto_mode=True, proportional_on_measurement=False)
 
 # --- Define Tag
 id_to_find = 0
 marker_size = 15  # - [cm]
 
 read_images_from_dir = False
-input_images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-10_19.31.23_with_raw_images\raw'
+input_images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-12_22.22.50_check_yaw\raw'
 save_frames = True
 save_frames_raw = True# save raw frames, without markers and text
 output_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream'
@@ -101,7 +101,7 @@ def isRotationMatrix(R):
 # Calculates rotation matrix to euler angles
 # The result is the same as MATLAB except the order
 # of the euler angles ( x and z are swapped ).
-def rotationMatrixToEulerAngles(R):
+def rotationMatrixToEulerAngles(R, degrees=False):
     assert (isRotationMatrix(R))
 
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
@@ -116,6 +116,11 @@ def rotationMatrixToEulerAngles(R):
         x = math.atan2(-R[1, 2], R[1, 1])
         y = math.atan2(-R[2, 0], sy)
         z = 0
+
+    if degrees:
+        x = np.degrees(x)
+        y = np.degrees(y)
+        z = np.degrees(z)
 
     return np.array([x, y, z])
 
@@ -155,7 +160,12 @@ def eulerAnglesToRotationMatrix(roll, pitch, yaw, degrees=True):
 _FLOAT_EPS_4 = np.finfo(float).eps * 4.0
 
 
-def euler2mat(z=0, y=0, x=0):
+def euler2mat(z=0, y=0, x=0, degrees=True):
+
+    if degrees:
+        x = np.radians(x)
+        y = np.radians(y)
+        z= np.radians(z)
 
     Ms = []
     if z:
@@ -180,11 +190,11 @@ def euler2mat(z=0, y=0, x=0):
                  [0, cosx, -sinx],
                  [0, sinx, cosx]]))
     if Ms:
-        return np.reduce(np.dot, Ms[::-1])
+        return reduce(np.dot, Ms[::-1])
     return np.eye(3)
 
 
-def mat2euler(M, cy_thresh=None):
+def mat2euler(M, cy_thresh=None, degrees=True):
 
     M = np.asarray(M)
     if cy_thresh is None:
@@ -204,6 +214,12 @@ def mat2euler(M, cy_thresh=None):
         z = math.atan2(r21,  r22)
         y = math.atan2(r13,  cy) # atan2(sin(y), cy)
         x = 0.0
+
+    if degrees:
+        x = np.degrees(x)
+        y = np.degrees(y)
+        z = np.degrees(z)
+
     return z, y, x
 
 
@@ -218,6 +234,8 @@ R_flip[0, 0] = 1.0
 R_flip[1, 1] = -1.0
 R_flip[2, 2] = -1.0
 
+yaw, pitch, roll = mat2euler(R_flip, degrees=True)
+
 # R_tag_to_drone, R_drone_to_tag = eulerAnglesToRotationMatrix(roll=0, pitch=-90, yaw=90)
 # R_camera_to_tag, R_tag_to_camera = eulerAnglesToRotationMatrix(roll=0, pitch=0, yaw=180)
 #
@@ -225,6 +243,8 @@ R_flip[2, 2] = -1.0
 
 # roll, pitch, yaw = rotationMatrixToEulerAngles(R_camera_to_tag) # sanity check
 # roll, pitch, yaw = rotationMatrixToEulerAngles(R_camera_to_drone) # sanity check
+R_tag_to_drone = euler2mat(z=-90, y=90, x=0, degrees=True)
+
 # R_flip = R_tag_to_camera # FIXME!
 
 # --- Define the aruco dictionary
@@ -367,7 +387,7 @@ while notDone:
         # cv2.putText(frame, str_attitude, (0, 150), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # -- Now get Position and attitude f the camera respect to the marker
-        pos_camera = -R_tc * np.matrix(tvec).T
+        pos_camera = R_tc * np.matrix(tvec).T
 
         str_position = "CAMERA Position x=%4.0f  y=%4.0f  z=%4.0f" % (pos_camera[0], pos_camera[1], pos_camera[2])
         cv2.putText(frame, str_position, (0, 200), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
@@ -375,6 +395,7 @@ while notDone:
         # -- Get the attitude of the camera respect to the frame
         # roll_camera, pitch_camera, yaw_camera = rotationMatrixToEulerAngles(R_flip * R_tc)
         roll_camera, pitch_camera, yaw_camera = rotationMatrixToEulerAngles(R_flip * R_tc)
+        roll_camera, pitch_camera, yaw_camera = mat2euler(R_flip * R_tc)
         # roll_camera, pitch_camera, yaw_camera = mat2euler(R_flip * R_tc)
 
         str_attitude = "CAMERA Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
@@ -382,25 +403,39 @@ while notDone:
         cv2.putText(frame, str_attitude, (0, 250), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # # drone position
-        # pos_drone = R_camera_to_drone * R_tc * (-1 * np.matrix(tvec).T)
+        pos_drone = R_tag_to_drone * (1 * np.matrix(tvec).T)
         #
-        # str_position = "DRONE Position x=%4.0f  y=%4.0f  z=%4.0f" % (pos_drone[0], pos_drone[1], pos_drone[2])
-        # cv2.putText(frame, str_position, (0, 300), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+        str_position = "DRONE Position x=%4.0f  y=%4.0f  z=%4.0f" % (pos_drone[0], pos_drone[1], pos_drone[2])
+        cv2.putText(frame, str_position, (0, 300), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
         #
-        # # -- Get the attitude of the drone respect to the frame
-        # roll_drone, pitch_drone, yaw_drone= rotationMatrixToEulerAngles(R_tag_to_drone * R_ct)
-        # str_attitude = "Drone Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (
-        #     math.degrees(roll_drone), math.degrees(pitch_drone), math.degrees(yaw_drone))
-        # cv2.putText(frame, str_attitude, (0, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+        # -- Get the attitude of the drone respect to the frame
+        yaw_drone, pitch_drone, roll_drone = mat2euler(R_tag_to_drone * R_ct)
+        str_attitude = "Drone Attitude r=%4.0f  p=%4.0f  y=%4.0f" % (roll_drone, pitch_drone, yaw_drone)
+        cv2.putText(frame, str_attitude, (0, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
         # control
-        # x_command = 1 * np.asarray(pid_x(pos_camera[2])).squeeze()
+
+        # use pos_camera
+        # x_command = -1 * np.asarray(pid_x(pos_camera[2])).squeeze()
         # y_command = 1 *np.asarray(pid_y(pos_camera[0])).squeeze()
-        # z_command = 1 * np.asarray(pid_z(pos_camera[1])).squeeze()
-        x_command = -1 * np.asarray(pid_x(pos_camera[2])).squeeze()
-        y_command = 1 *np.asarray(pid_y(pos_camera[0])).squeeze()
-        z_command = - 1 * np.asarray(pid_z(pos_camera[1])).squeeze()
-        az_command = 0 #np.asarray(pid_az(math.degrees(pitch_camera))).squeeze() # camera pitch corresponds to azimuth
+        # z_command = - 1 * np.asarray(pid_z(pos_camera[1])).squeeze()
+
+        # use pos_drone
+
+        x_command = - 1 * np.asarray(pid_x(pos_drone[0])).squeeze()
+        y_command = 1 *np.asarray(pid_y(pos_drone[1])).squeeze()
+        z_command = - 1 * np.asarray(pid_z(pos_drone[2])).squeeze()
+        # x_command = 0
+        # y_command = 0
+        # z_command = 0
+
+        az = np.degrees(np.arctan2(- pos_drone[1], pos_drone[0]))
+        # az_command = 0
+        az_command  = -1 * np.asarray(pid_az(az)).squeeze() # camera pitch corresponds to azimuth
+
+        str_attitude = "Azimuth: az=%4.0f" % (az)
+        cv2.putText(frame, str_attitude, (0, 500), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+
     else:
         x_command = 0
         y_command = 0
@@ -414,6 +449,8 @@ while notDone:
     str_attitude = "Control Commands: x=%4.0f  y=%4.0f  z=%4.0f  az=%4.0f" % (
         x_command, y_command, z_command, az_command)
     cv2.putText(frame, str_attitude, (0, 450), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+
+
 
     if not read_images_from_dir:
 
