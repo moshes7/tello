@@ -59,7 +59,7 @@ SPEED = 40
 sleepTime = 0.5
 x_ref = 100
 y_ref = 0
-z_ref = -10
+z_ref = 0 #-10
 az_ref = 0
 
 TIME_BTW_COMMANDS = 0.2  # [sec]
@@ -71,13 +71,14 @@ pid_az = PID(Kp=3, Ki=0.0, Kd=0.2, setpoint=az_ref, sample_time=TIME_BTW_COMMAND
 
 # --- Define Tag
 id_to_find = 0
-marker_size = 15  # - [cm]
+# marker_size = 15  # - [cm]
+marker_size = 5  # - [cm]
 
 read_images_from_dir = False
 input_images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-12_22.22.50_check_yaw\raw'
 save_frames = True
 save_frames_raw = True# save raw frames, without markers and text
-output_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream'
+output_dir = r'..\..\images\tello_stream'
 time_str = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
 output_dir = os.path.join(output_dir, time_str)
 os.makedirs(output_dir, exist_ok=True)
@@ -224,7 +225,7 @@ def mat2euler(M, cy_thresh=None, degrees=True):
 
 
 # --- Get the camera calibration path
-calib_path = r'C:\Users\Moshe\Sync\Projects\tello\images\calibration_camera1/'
+calib_path = r'..\..\images\calibration_camera1/'
 camera_matrix = np.loadtxt(calib_path + 'cameraMatrix.txt', delimiter=',')
 camera_distortion = np.loadtxt(calib_path + 'cameraDistortion.txt', delimiter=',')
 
@@ -249,7 +250,8 @@ R_tag_to_drone = euler2mat(z=-90, y=90, x=0, degrees=True)
 
 # --- Define the aruco dictionary
 # aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
-aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_7X7_100)
+# aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_7X7_100)
+aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
 parameters = aruco.DetectorParameters_create()
 
 # --- Capture the videocamera (this may also be a video or a picture)
@@ -264,6 +266,8 @@ if read_images_from_dir:
 else:
     # initializations
     tello = Tello()
+    # tello = Tello('192.168.10.2'); y_ref = +30
+    # tello = Tello('192.168.10.4'); y_ref = -30
 
     if not tello.connect():
         print("Tello not connected")
