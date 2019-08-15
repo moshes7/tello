@@ -57,17 +57,20 @@ from functools import reduce
 #   z: forward
 SPEED = 40
 sleepTime = 0.5
-x_ref = 100
+x_ref = 120
 y_ref = 0
-z_ref = 0 #-10
+z_ref = +20
 az_ref = 0
 
 TIME_BTW_COMMANDS = 0.2  # [sec]
-
-pid_x = PID(Kp=0.75, Ki=0, Kd=0.2, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+# pid_x = PID(Kp=0.75, Ki=0, Kd=0.2, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+# pid_y = PID(Kp=0.65, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+# pid_z = PID(Kp=1.2, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
+pid_x = PID(Kp=0.65, Ki=0, Kd=0.2, setpoint=x_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
 pid_y = PID(Kp=0.65, Ki=0.0, Kd=0.2, setpoint=y_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
 pid_z = PID(Kp=1.2, Ki=0.0, Kd=0.2, setpoint=z_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-SPEED, SPEED), auto_mode=True, proportional_on_measurement=False)
 pid_az = PID(Kp=3, Ki=0.0, Kd=0.2, setpoint=az_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-70, 70), auto_mode=True, proportional_on_measurement=False)
+# pid_az = PID(Kp=0.0, Ki=0.0, Kd=0., setpoint=az_ref, sample_time=TIME_BTW_COMMANDS, output_limits=(-70, 70), auto_mode=True, proportional_on_measurement=False)
 
 # --- Define Tag
 id_to_find = 0
