@@ -9,7 +9,7 @@ from djitellopy import Tello
 from simple_pid import PID
 from functools import reduce
 import configparser
-from code.utils import euler2mat, eulerAnglesToRotationMatrix, isRotationMatrix, mat2euler
+from autonomous_tello.utils import euler2mat, eulerAnglesToRotationMatrix, isRotationMatrix, mat2euler
 
 class AutoTello(object):
 
@@ -17,7 +17,7 @@ class AutoTello(object):
     Autonums Tello class
     """
 
-    def __init__(self, config_file='../config/config_default.ini'):
+    def __init__(self, config_file='./config/config_default.ini'):
 
         # read config file
         config = configparser.ConfigParser()
@@ -52,8 +52,8 @@ class AutoTello(object):
 
         # Get the camera calibration path
         calib_path = config['general']['calib_path']
-        self.camera_matrix = np.loadtxt(calib_path + 'cameraMatrix.txt', delimiter=',')
-        self.camera_distortion = np.loadtxt(calib_path + 'cameraDistortion.txt', delimiter=',')
+        self.camera_matrix = np.loadtxt(os.path.join(calib_path, 'cameraMatrix.txt'), delimiter=',')
+        self.camera_distortion = np.loadtxt(os.path.join(calib_path, 'cameraDistortion.txt'), delimiter=',')
 
         # --- Define the aruco dictionary
         # aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)

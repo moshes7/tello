@@ -1,3 +1,4 @@
+-e git+https://github.com/moshes7/tello.git@2fba8226efdfc9d68331f95b44b46a19b87102f6#egg=autonomous_tello
 cycler==0.10.0
 -e git+https://github.com/damiafuentes/DJITelloPy.git@ed1ec875a98947328f8965e018006083a556e0c0#egg=djitellopy
 imutils==0.5.2
