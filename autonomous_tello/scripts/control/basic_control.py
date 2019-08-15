@@ -78,10 +78,10 @@ id_to_find = 0
 marker_size = 5  # - [cm]
 
 read_images_from_dir = False
-input_images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-12_22.22.50_check_yaw\raw'
+input_images_dir = r'C:/Users/Moshe/Sync/Projects/tello/images/tello_stream/2019-06-12_22.22.50_check_yaw/raw'
 save_frames = True
 save_frames_raw = True# save raw frames, without markers and text
-output_dir = r'..\..\images\tello_stream'
+output_dir = r'../../../../images/tello_stream'
 time_str = datetime.datetime.now().strftime('%Y-%m-%d_%H.%M.%S')
 output_dir = os.path.join(output_dir, time_str)
 os.makedirs(output_dir, exist_ok=True)
@@ -228,7 +228,7 @@ def mat2euler(M, cy_thresh=None, degrees=True):
 
 
 # --- Get the camera calibration path
-calib_path = r'..\..\images\calibration_camera1/'
+calib_path = r'../../../images/calibration_camera1/'
 camera_matrix = np.loadtxt(calib_path + 'cameraMatrix.txt', delimiter=',')
 camera_distortion = np.loadtxt(calib_path + 'cameraDistortion.txt', delimiter=',')
 
