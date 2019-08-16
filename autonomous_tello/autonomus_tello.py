@@ -8,6 +8,7 @@ import datetime
 from djitellopy import Tello
 from simple_pid import PID
 import configparser
+import threading
 from autonomous_tello.utils import rotationMatrixToEulerAngles, euler2mat, mat2euler
 
 class AutoTello(object):
@@ -30,17 +31,17 @@ class AutoTello(object):
         #   z: forward
         self.pid_x = PID(Kp=float(config['pid']['kp_x']), Ki=float(config['pid']['ki_x']), Kd=float(config['pid']['kd_x']),
                          setpoint=float(config['control_reference']['x']), sample_time=float(config['pid']['time_between_commands']),
-                         output_limits=(- float(config['pid']['velocity']), float(config['pid']['velocity'])),
+                         output_limits=(- int(config['pid']['velocity']), int(config['pid']['velocity'])),
                          auto_mode=True, proportional_on_measurement=False)
 
         self.pid_y = PID(Kp=float(config['pid']['kp_y']), Ki=float(config['pid']['ki_y']), Kd=float(config['pid']['kd_y']),
                          setpoint=float(config['control_reference']['y']), sample_time=float(config['pid']['time_between_commands']),
-                         output_limits=(-float(config['pid']['velocity']), float(config['pid']['velocity'])),
+                         output_limits=(-int(config['pid']['velocity']), int(config['pid']['velocity'])),
                          auto_mode=True, proportional_on_measurement=False)
 
         self.pid_z = PID(Kp=float(config['pid']['kp_z']), Ki=float(config['pid']['ki_z']), Kd=float(config['pid']['kd_z']),
                          setpoint=float(config['control_reference']['z']), sample_time=float(config['pid']['time_between_commands']),
-                         output_limits=(-float(config['pid']['velocity']), float(config['pid']['velocity'])),
+                         output_limits=(-int(config['pid']['velocity']), int(config['pid']['velocity'])),
                          auto_mode=True, proportional_on_measurement=False)
 
         self.pid_az = PID(Kp=float(config['pid']['kp_az']), Ki=float(config['pid']['ki_az']), Kd=float(config['pid']['kd_az']),
@@ -89,7 +90,7 @@ class AutoTello(object):
             print("Tello not connected")
             exit(1)
 
-        if not tello.set_speed(self.config['pid']['velocity']):
+        if not tello.set_speed(int(self.config['pid']['velocity'])):
             print("Not set speed to lowest possible")
             exit(1)
 
@@ -153,6 +154,7 @@ class AutoTello(object):
     def main(self):
 
         # unpack needed variables
+        tello = self.tello
         read_images_from_dir = self.config.getboolean('general', 'read_images_from_dir')
         id_to_find = int(self.config['aruco_marker']['id'])
         marker_size = int(self.config['aruco_marker']['marker_size'])
@@ -162,12 +164,13 @@ class AutoTello(object):
         az_ref = float(self.config['control_reference']['az'])
         momentum = float(self.config['pid']['momentum'])
         time_between_commands = float(self.config['pid']['time_between_commands'])
-        output_dir = self.config['general']['output_dir']
+        output_dir = self.output_dir
         save_frames = self.config.getboolean('general', 'save_frames')
         save_frames_raw = self.config.getboolean('general', 'save_frames_raw')
+        display = self.config.getboolean('general', 'display')
 
         if save_frames_raw:
-            output_dir_raw = self.self.output_dir_raw
+            output_dir_raw = self.output_dir_raw
 
         if not read_images_from_dir:
             frame_read = self.frame_read
@@ -342,7 +345,8 @@ class AutoTello(object):
                     # time.sleep(1 / FPS)
 
             # --- Display the frame
-            cv2.imshow('frame', frame)
+            if display:
+                cv2.imshow('frame', frame)
 
             if save_frames:
                 img_name = os.path.join(output_dir, '{0:07d}.jpg'.format(frame_num))
@@ -394,9 +398,15 @@ class SimpleClass(object):
         pass
 
 
-if __name__ == '__main__':
+def run_single_tello():
 
-    tello = AutoTello()
+    print('run_single_tello: start')
+
+    # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_default.ini'
+    config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_right.ini'
+    # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_left.ini'
+
+    tello = AutoTello(config_file=config_file)
 
     if tello.config.getboolean('general', 'read_images_from_dir'):
         input_images_dir = tello.config['general']['input_images_dir']
@@ -405,5 +415,49 @@ if __name__ == '__main__':
         tello.connect()
 
     tello.main()
+
+    print('run_single_tello: end')
+
+
+def run_multiple_tellos():
+    print('run_multiple_tellos: start')
+
+    # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_default.ini'
+    config_files = [
+                    r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_right.ini',
+                    r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_left.ini',
+                    ]
+
+    # read config files
+    tellos = []
+    for config_file in config_files:
+        tello = AutoTello(config_file=config_file)
+        tellos.append(tello)
+
+    # connect to all tellos
+    for tello in tellos:
+        if tello.config.getboolean('general', 'read_images_from_dir'):
+            input_images_dir = tello.config['general']['input_images_dir']
+            images_list = [os.path.join(input_images_dir, image_name) for image_name in os.listdir(input_images_dir) if
+                           image_name.endswith('jpg')]
+        else:
+            tello.connect()
+
+
+
+
+    # run main loop in differenct threads
+    for tello in tellos:
+        thread = threading.Thread(target=tello.main(), args=(), daemon=True)
+        thread.start()
+
+
+    print('run_multiple_tellos: end')
+
+
+if __name__ == '__main__':
+
+    run_single_tello()
+    # run_multiple_tellos()
 
     print('Done!')
