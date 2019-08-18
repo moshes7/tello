@@ -403,7 +403,9 @@ def run_single_tello():
     print('run_single_tello: start')
 
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_default.ini'
-    config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_right.ini'
+    # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_right.ini'
+    # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_back_center.ini'
+    config_file = r'.\config\config_back_center.ini' # 9F
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_left.ini'
 
     tello = AutoTello(config_file=config_file)
