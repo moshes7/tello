@@ -49,6 +49,8 @@ class AutoTello(object):
                          output_limits=(-float(config['pid']['angular_velocity']), float(config['pid']['angular_velocity'])),
                          auto_mode=True, proportional_on_measurement=False)
 
+        # takeoff flag
+        self.takeoff = config.getboolean('general', 'takeoff')# tello will take off only when True
 
         # Get the camera calibration path
         calib_path = config['general']['calib_path']
@@ -116,11 +118,10 @@ class AutoTello(object):
         #
         # frame_read = tello.get_frame_read()
 
-        time.sleep(3)
-
-        ok = tello.takeoff()
-
-        time.sleep(3)
+        if self.takeoff:
+            time.sleep(3)
+            ok = tello.takeoff()
+            time.sleep(3)
 
         self.time_received_last_command = time.time()
 
@@ -405,7 +406,9 @@ def run_single_tello():
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_default.ini'
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_right.ini'
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_back_center.ini'
-    config_file = r'.\config\config_back_center.ini' # 9F
+    # config_file = r'.\config\config_back_center.ini' # 9F
+    config_file = r'./config/config_default.ini' # BE
+    # config_file = r'./config/config_save_images_without_takeoff.ini' # BE
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_left.ini'
 
     tello = AutoTello(config_file=config_file)
