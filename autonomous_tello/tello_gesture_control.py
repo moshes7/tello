@@ -31,7 +31,7 @@ class TelloGestureControl(object):
         self.send_rc_control = False
 
         # initialize gesture classifier
-        self.model_path = './gesture_classifier/export.pkl' # FIXME: read parameters from config instead of hard-coding
+        self.model_path = './gesture_control' # FIXME: read parameters from config instead of hard-coding
         self.gesture_classifier = GestureClassifier(model_path=self.model_path)
 
         # takeoff flag
@@ -65,7 +65,7 @@ class TelloGestureControl(object):
             print("Tello not connected")
             exit(1)
 
-        if not tello.set_speed(int(self.config['pid']['velocity'])):
+        if not tello.set_speed(int(self.config['control_params']['velocity'])):
             print("Not set speed to lowest possible")
             exit(1)
 
@@ -141,8 +141,8 @@ class TelloGestureControl(object):
         # unpack needed variables
         tello = self.tello
         read_images_from_dir = self.config.getboolean('general', 'read_images_from_dir')
-        momentum = float(self.config['pid']['momentum'])
-        time_between_commands = float(self.config['pid']['time_between_commands'])
+        momentum = float(self.config['control_params']['momentum'])
+        time_between_commands = float(self.config['control_params']['time_between_commands'])
         output_dir = self.output_dir
         save_frames = self.config.getboolean('general', 'save_frames')
         save_frames_raw = self.config.getboolean('general', 'save_frames_raw')
@@ -169,6 +169,9 @@ class TelloGestureControl(object):
         frame_vec = []
         time_vec = []
         dt_vec = []
+
+        pred_counter = 0
+        pred = None
 
         while notDone:
 
@@ -199,6 +202,7 @@ class TelloGestureControl(object):
             if self.gesture_classifier.prediction_ready:
                 with self.gesture_classifier.lock:
                     pred = self.gesture_classifier.q.get()
+                    pred = str(pred)
                     new_pred = True
 
 
@@ -208,7 +212,7 @@ class TelloGestureControl(object):
                 pred_counter = 0
 
                 str_prediction = 'Prediction: {}'.format(pred)
-                cv2.putText(frame, str_prediction, (0, 150), font, font_size, (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.putText(frame, str_prediction, (0, 150), font, 2*font_size, (0, 0, 255), 2, cv2.LINE_AA)
                 str_prediction_counter = 'Frames from last redictetion: {}'.format(pred_counter)
                 cv2.putText(frame, str_prediction_counter, (0, 150), font, font_size, (0, 0, 255), 2, cv2.LINE_AA)
 
@@ -216,7 +220,7 @@ class TelloGestureControl(object):
                 self.update_velocity()
                 pred_counter += 1
                 str_prediction = 'Prediction from : {}'.format(pred)
-                cv2.putText(frame, str_prediction, (0, 150), font, font_size, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.putText(frame, str_prediction, (0, 150), font, 2*font_size, (255, 0, 0), 2, cv2.LINE_AA)
                 str_prediction_counter = 'Frames from last redictetion: {}'.format(pred_counter)
                 cv2.putText(frame, str_prediction_counter, (0, 150), font, font_size, (255, 0, 0), 2, cv2.LINE_AA)
 
@@ -236,10 +240,10 @@ class TelloGestureControl(object):
 
                     self.send_control_command()
 
-                    if pred == 'x':
-                        time.sleep(0.5)
-                        tello.land()
-                        time.sleep(5)
+                    # if pred == 'x':
+                    #     time.sleep(0.5)
+                    #     tello.land()
+                    #     time.sleep(5)
 
 
             # --- Display the frame
@@ -293,7 +297,7 @@ class TelloGestureControl(object):
 def run_single_tello_with_gesture_classifer():
 
     print('run_single_tello_with_gesture_classifier: start')
-    config_file = r'./gesture_classifier/config_default.ini' # BE
+    config_file = r'./gesture_control/config_default.ini' # BE
 
     tello = TelloGestureControl(config_file=config_file)
 
@@ -303,15 +307,27 @@ def run_single_tello_with_gesture_classifer():
     else:
         tello.connect()
 
-
     # tello main thread
-    thread1 = threading.Thread(target=tello.main(), args=(), daemon=True)
+    thread1 = threading.Thread(target=tello.main, args=(), daemon=True)
     thread1.start()
+    time.sleep(0.5)
 
     # classifier thread
-    thread2 = threading.Thread(target=tello.gesture_classifier.main(), args=(), daemon=True)
+    thread2 = threading.Thread(target=tello.gesture_classifier.main, args=(), daemon=True)
     thread2.start()
 
+    # for n in range(2):
+    #
+    #     if n == 0:
+    #         # classifier thread
+    #         print('gestures thread')
+    #         thread2 = threading.Thread(target=tello.gesture_classifier.main, args=(), daemon=True)
+    #         thread2.start()
+    #     if n == 1:
+    #         # tello main thread
+    #         print('tello thread')
+    #         thread1 = threading.Thread(target=tello.main, args=(), daemon=True)
+    #         thread1.start()
 
     print('run_single_tello_with_gesture_classifier: end')
 
