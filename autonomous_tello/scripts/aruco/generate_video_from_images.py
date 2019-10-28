@@ -6,7 +6,9 @@ import numpy as np
 max_frame_num = None
 # max_frame_num = 300
 
-images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-06-12_23.49.29 _First_Good_Tracking_With_Azimuth'
+# images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_00.19.27_take_1'
+images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_00.21.20_take_2'
+# images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_00.23.47_take_3'
 output_dir = os.path.join(images_dir, 'video')
 os.makedirs(output_dir, exist_ok=True)
 output_filename = 'video.mp4'
@@ -26,7 +28,8 @@ height , width , layers =  img.shape
 
 # instanciate video object
 # fps = 20 # [Hz]
-fps = 10 # [Hz]
+fps = 15 # [Hz]
+# fps = 10 # [Hz]
 fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 video = cv2.VideoWriter(output_full_file,fourcc,fps,(width,height))
 

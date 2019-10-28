@@ -9,9 +9,8 @@ class GestureClassifier(object):
     def __init__(self, model_path='./gesture_control', q=None):
 
         self.lock = threading.Lock()
-        self.image_ready = False
-        self.prediction_ready= False
-        self.q = Queue()
+        self.q_images = Queue(maxsize=1)
+        self.q_predictions = Queue(maxsize=1)
 
         # load model
         self.model = load_learner(model_path)
@@ -28,16 +27,10 @@ class GestureClassifier(object):
 
         while True:
 
-            if self.image_ready:
-
-                with self.lock:
-                    self.image_ready = False
-                    self.prediction_ready = False
-                    img = self.q.get()
+                img = self.q_images.get()
 
                 pred = self.predict(img)
 
-                with self.lock:
-                    self.q.put(pred)
-                    self.prediction_ready = True
+                if self.q_predictions.qsize() == 0:
+                    self.q_predictions.put(pred)
 

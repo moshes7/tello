@@ -25,10 +25,11 @@ class TelloGestureControl(object):
         self.left_right_velocity = 0
         self.up_down_velocity = 0
         self.yaw_velocity = 0
-        self.speed = 30
+        # self.speed = 30
+        self.speed = 40
         self.momentum = 0.9
 
-        self.send_rc_control = False
+        self.send_rc_control = True
 
         # initialize gesture classifier
         self.model_path = './gesture_control' # FIXME: read parameters from config instead of hard-coding
@@ -107,7 +108,11 @@ class TelloGestureControl(object):
         Arguments:
             key: pygame key
         """
-        if class_pred == 'triangle':  # set forward velocity
+
+        self.for_back_velocity = 0
+        self.left_right_velocity = 0
+
+        if class_pred == 'x':  # set forward velocity
             self.for_back_velocity = self.speed
         elif class_pred == 'stop':  # set backward velocity
             self.for_back_velocity = -self.speed
@@ -131,16 +136,15 @@ class TelloGestureControl(object):
     def send_control_command(self):
         """ Update routine. Send velocities to Tello."""
         if self.send_rc_control:
-            self.tello.send_rc_control(self.left_right_velocity, self.for_back_velocity, self.up_down_velocity,
-                                       self.yaw_velocity)
-
+            self.tello.send_rc_control(int(self.left_right_velocity), int(self.for_back_velocity), int(self.up_down_velocity), int(self.yaw_velocity))
 
 
     def main(self):
 
         # unpack needed variables
-        tello = self.tello
         read_images_from_dir = self.config.getboolean('general', 'read_images_from_dir')
+        if not read_images_from_dir:
+            tello = self.tello
         momentum = float(self.config['control_params']['momentum'])
         time_between_commands = float(self.config['control_params']['time_between_commands'])
         output_dir = self.output_dir
@@ -149,6 +153,8 @@ class TelloGestureControl(object):
         display = self.config.getboolean('general', 'display')
 
         new_pred = False
+
+        can_insert_image_to_queue = True
 
         if save_frames_raw:
             output_dir_raw = self.output_dir_raw
@@ -178,12 +184,13 @@ class TelloGestureControl(object):
             # -- Read the camera frame
             if read_images_from_dir:
 
-                if frame_num >= len(images_list):
+                if frame_num >= len(self.images_list):
                     notDone = False
 
-                frame_num = np.mod(frame_num, len(images_list))
+                frame_num = np.mod(frame_num, len(self.images_list))
+                print(frame_num)
 
-                image_name = images_list[frame_num]
+                image_name = self.images_list[frame_num]
                 frame = cv2.imread(image_name, cv2.IMREAD_UNCHANGED)
             else:
                 # ret, frame = cap.read()
@@ -192,18 +199,29 @@ class TelloGestureControl(object):
             # raw frame
             frame_raw = np.copy(frame)
 
-            if not self.gesture_classifier.image_ready:
+            if can_insert_image_to_queue and self.gesture_classifier.q_images.qsize() == 0:
+                can_insert_image_to_queue = False
                 img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                with self.gesture_classifier.lock:
-                    self.gesture_classifier.q.put(img)
-                    self.gesture_classifier.image_ready = True
-                    self.gesture_classifier.prediction_ready = False
+                self.gesture_classifier.q_images.put(img)
 
-            if self.gesture_classifier.prediction_ready:
-                with self.gesture_classifier.lock:
-                    pred = self.gesture_classifier.q.get()
-                    pred = str(pred)
-                    new_pred = True
+            if self.gesture_classifier.q_predictions.qsize() > 0:
+                pred = self.gesture_classifier.q_predictions.get()
+                can_insert_image_to_queue = True
+                pred = str(pred)
+                new_pred = True
+
+            # if not self.gesture_classifier.image_ready:
+            #     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            #     with self.gesture_classifier.lock:
+            #         self.gesture_classifier.q.put(img)
+            #         self.gesture_classifier.image_ready = True
+            #         self.gesture_classifier.prediction_ready = False
+            #
+            # if self.gesture_classifier.prediction_ready:
+            #     with self.gesture_classifier.lock:
+            #         pred = self.gesture_classifier.q.get()
+            #         pred = str(pred)
+            #         new_pred = True
 
 
             if new_pred:
@@ -212,27 +230,37 @@ class TelloGestureControl(object):
                 pred_counter = 0
 
                 str_prediction = 'Prediction: {}'.format(pred)
-                cv2.putText(frame, str_prediction, (0, 150), font, 2*font_size, (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.putText(frame, str_prediction, (20, 50), font, 2*font_size, (0, 0, 255), 2, cv2.LINE_AA)
                 str_prediction_counter = 'Frames from last redictetion: {}'.format(pred_counter)
-                cv2.putText(frame, str_prediction_counter, (0, 150), font, font_size, (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.putText(frame, str_prediction_counter, (20, 150), font, font_size, (0, 0, 255), 2, cv2.LINE_AA)
 
             else:
                 self.update_velocity()
                 pred_counter += 1
                 str_prediction = 'Prediction from : {}'.format(pred)
-                cv2.putText(frame, str_prediction, (0, 150), font, 2*font_size, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.putText(frame, str_prediction, (20, 50), font, 2*font_size, (255, 0, 0), 2, cv2.LINE_AA)
                 str_prediction_counter = 'Frames from last redictetion: {}'.format(pred_counter)
-                cv2.putText(frame, str_prediction_counter, (0, 150), font, font_size, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.putText(frame, str_prediction_counter, (20, 150), font, font_size, (255, 0, 0), 2, cv2.LINE_AA)
 
+            self.for_back_velocity = int(self.for_back_velocity)
+            self.left_right_velocity = int(self.left_right_velocity)
+            self.up_down_velocity = int(self.up_down_velocity)
+            self.yaw_velocity = int(self.yaw_velocity)
 
+            str_command = r'Forward={}'.format(min(self.for_back_velocity, 0))
+            cv2.putText(frame, str_command, (20, 250), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+            str_command = r'Backward={}'.format(max(self.for_back_velocity, 0))
+            cv2.putText(frame, str_command, (20, 300), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
             str_command = r'Right={}'.format(min(self.left_right_velocity, 0))
-            cv2.putText(frame, str_command, (0, 250), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, str_command, (20, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
             str_command = r'Left={}'.format(max(self.left_right_velocity, 0))
-            cv2.putText(frame, str_command, (0, 300), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, str_command, (20, 400), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
             str_command = r'Up={}'.format(min(self.up_down_velocity, 0))
-            cv2.putText(frame, str_command, (0, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, str_command, (20, 450), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
             str_command = r'Down={}'.format(max(self.up_down_velocity, 0))
-            cv2.putText(frame, str_command, (0, 400), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, str_command, (20, 500), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
+            str_command = r'Yaw={}'.format(self.yaw_velocity)
+            cv2.putText(frame, str_command, (20, 550), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
 
             if not read_images_from_dir:
 
@@ -297,13 +325,14 @@ class TelloGestureControl(object):
 def run_single_tello_with_gesture_classifer():
 
     print('run_single_tello_with_gesture_classifier: start')
-    config_file = r'./gesture_control/config_default.ini' # BE
+    # config_file = r'./gesture_control/config_default.ini' # BE
+    config_file = r'./gesture_control/config_load_images.ini' # BE
 
     tello = TelloGestureControl(config_file=config_file)
 
     if tello.config.getboolean('general', 'read_images_from_dir'):
         input_images_dir = tello.config['general']['input_images_dir']
-        images_list = [os.path.join(input_images_dir, image_name) for image_name in os.listdir(input_images_dir) if image_name.endswith('jpg')]
+        tello.images_list = [os.path.join(input_images_dir, image_name) for image_name in os.listdir(input_images_dir) if image_name.endswith('jpg')]
     else:
         tello.connect()
 
