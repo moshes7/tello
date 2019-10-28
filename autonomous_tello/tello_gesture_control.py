@@ -210,20 +210,6 @@ class TelloGestureControl(object):
                 pred = str(pred)
                 new_pred = True
 
-            # if not self.gesture_classifier.image_ready:
-            #     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            #     with self.gesture_classifier.lock:
-            #         self.gesture_classifier.q.put(img)
-            #         self.gesture_classifier.image_ready = True
-            #         self.gesture_classifier.prediction_ready = False
-            #
-            # if self.gesture_classifier.prediction_ready:
-            #     with self.gesture_classifier.lock:
-            #         pred = self.gesture_classifier.q.get()
-            #         pred = str(pred)
-            #         new_pred = True
-
-
             if new_pred:
                 self.gesture_classifier.image_ready = False
                 self.class2control(pred)
@@ -333,30 +319,19 @@ def run_single_tello_with_gesture_classifer():
     if tello.config.getboolean('general', 'read_images_from_dir'):
         input_images_dir = tello.config['general']['input_images_dir']
         tello.images_list = [os.path.join(input_images_dir, image_name) for image_name in os.listdir(input_images_dir) if image_name.endswith('jpg')]
+        daemon = False
     else:
         tello.connect()
+        daemon = True
 
     # tello main thread
-    thread1 = threading.Thread(target=tello.main, args=(), daemon=True)
+    thread1 = threading.Thread(target=tello.main, args=(), daemon=daemon)
     thread1.start()
     time.sleep(0.5)
 
     # classifier thread
-    thread2 = threading.Thread(target=tello.gesture_classifier.main, args=(), daemon=True)
+    thread2 = threading.Thread(target=tello.gesture_classifier.main, args=(), daemon=daemon)
     thread2.start()
-
-    # for n in range(2):
-    #
-    #     if n == 0:
-    #         # classifier thread
-    #         print('gestures thread')
-    #         thread2 = threading.Thread(target=tello.gesture_classifier.main, args=(), daemon=True)
-    #         thread2.start()
-    #     if n == 1:
-    #         # tello main thread
-    #         print('tello thread')
-    #         thread1 = threading.Thread(target=tello.main, args=(), daemon=True)
-    #         thread1.start()
 
     print('run_single_tello_with_gesture_classifier: end')
 
