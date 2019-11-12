@@ -6,9 +6,8 @@ import numpy as np
 max_frame_num = None
 # max_frame_num = 300
 
-# images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_00.19.27_take_1'
-images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_00.21.20_take_2'
-# images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_00.23.47_take_3'
+images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images\tello_stream\2019-10-30_09.43.19'
+# images_dir = r'C:\Users\Moshe\Sync\Projects\tello\images_gestures\tello_stream\2019-10-29_01.24.31_take_2_reproduced'
 output_dir = os.path.join(images_dir, 'video')
 os.makedirs(output_dir, exist_ok=True)
 output_filename = 'video.mp4'

@@ -408,6 +408,7 @@ def run_single_tello():
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_back_center.ini'
     # config_file = r'.\config\config_back_center.ini' # 9F
     config_file = r'./config/config_default.ini' # BE
+    # config_file = r'./config/config_front_left.ini' # BE
     # config_file = r'./config/config_save_images_without_takeoff.ini' # BE
     # config_file = r'D:\Moshe\tello\autonomous_tello\autonomous_tello\config\config_front_left.ini'
 

@@ -32,7 +32,8 @@ class TelloGestureControl(object):
         self.send_rc_control = True
 
         # initialize gesture classifier
-        self.model_path = './gesture_control' # FIXME: read parameters from config instead of hard-coding
+        # self.model_path = './gesture_control/224x224' # FIXME: read parameters from config instead of hard-coding
+        self.model_path = './gesture_control/480x360' # FIXME: read parameters from config instead of hard-coding
         self.gesture_classifier = GestureClassifier(model_path=self.model_path)
 
         # takeoff flag
@@ -233,9 +234,9 @@ class TelloGestureControl(object):
             self.up_down_velocity = int(self.up_down_velocity)
             self.yaw_velocity = int(self.yaw_velocity)
 
-            str_command = r'Forward={}'.format(min(self.for_back_velocity, 0))
+            str_command = r'Forward={}'.format(max(self.for_back_velocity, 0))
             cv2.putText(frame, str_command, (20, 250), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
-            str_command = r'Backward={}'.format(max(self.for_back_velocity, 0))
+            str_command = r'Backward={}'.format(min(self.for_back_velocity, 0))
             cv2.putText(frame, str_command, (20, 300), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
             str_command = r'Right={}'.format(min(self.left_right_velocity, 0))
             cv2.putText(frame, str_command, (20, 350), font, font_size, (0, 255, 0), 2, cv2.LINE_AA)
@@ -311,8 +312,8 @@ class TelloGestureControl(object):
 def run_single_tello_with_gesture_classifer():
 
     print('run_single_tello_with_gesture_classifier: start')
-    # config_file = r'./gesture_control/config_default.ini' # BE
-    config_file = r'./gesture_control/config_load_images.ini' # BE
+    config_file = r'./gesture_control/config_default.ini' # BE
+    # config_file = r'./gesture_control/config_load_images.ini' # BE
 
     tello = TelloGestureControl(config_file=config_file)
 

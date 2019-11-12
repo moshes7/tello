@@ -15,10 +15,14 @@ class GestureClassifier(object):
         # load model
         self.model = load_learner(model_path)
 
+        self.tfms = get_transforms(do_flip=False)
+        self.image_size = (360, 480)
+
     def predict(self, img):
 
         t = torch.tensor(np.ascontiguousarray(np.flip(img, 2)).transpose(2,0,1)).float()/255
         t = Image(t) # fastai.vision.Image, not PIL.Image
+        # t = t.apply_tfms(self.tfms, size=self.image_size)
         pred_class, pred_idx, outputs = self.model.predict(t)
 
         return pred_class
